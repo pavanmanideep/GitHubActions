@@ -9,10 +9,51 @@ jobs:
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
       - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
       - name: Check out repository code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
       - run: echo "🖥️ The workflow is now ready to test your code on the runner."
       - name: List files in the repository
         run: |
           ls ${{ github.workspace }}
       - run: echo "🍏 This job's status is ${{ job.status }}."
+
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Install Power Platform Tools
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Export Solution
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: 'https://myenv.crm.dynamics.com'
+          user-name: 'me@myenv.onmicrosoft.com'
+          password-secret: ${{ secrets.MYPASSWORD }}
+          solution-name: aSolution
+          solution-output-file: 'out/aSolution.zip'
+          working-directory: 'out'
+
+      - name: Unpack Solution
+        uses: microsoft/powerplatform-actions/unpack-solution@v1
+        with:
+          solution-file: 'out/aSolution.zip'
+          solution-folder: 'out/solutions/solution one'
+          solution-type: 'Unmanaged'
+          overwrite-files: true
+
+      - name: Publish Solution
+        uses: microsoft/powerplatform-actions/publish-solution@v1
+        with:
+          environment-url: 'https://myenv.crm.dynamics.com'
+          user-name: 'me@myenv.onmicrosoft.com'
+          password-secret: ${{ secrets.MYPASSWORD }}
+
+      - name: Prepare solution changes for check-in into source control
+        uses: microsoft/powerplatform-actions/branch-solution@v1
+        with:
+          solution-folder: 'out/solutions/solution one'
+          solution-target-folder: 'src/solutions/solution1'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+
