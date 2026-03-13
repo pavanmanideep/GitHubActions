@@ -23,33 +23,30 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: Install Power Platform Tools
-        uses: microsoft/powerplatform-actions/actions-install@v1.9.1
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-      - name: Repair PAC path if missing
-        continue-on-error: true
+      - name: Install PAC CLI and resolve path
         shell: bash
         run: |
-          echo "Expected PAC path: $POWERPLATFORMTOOLS_PACPATH"
-          if [ -z "$POWERPLATFORMTOOLS_PACPATH" ]; then
-            echo "POWERPLATFORMTOOLS_PACPATH is not set"
-            exit 0
+          dotnet tool install Microsoft.PowerApps.CLI.Tool --tool-path "$GITHUB_WORKSPACE/.pac"
+          pac_bin=$(find "$GITHUB_WORKSPACE/.pac" -maxdepth 1 -type f \( -name pac -o -name pac.exe \) | head -n 1)
+
+          if [ -z "$pac_bin" ]; then
+            echo "PAC binary was not found in $GITHUB_WORKSPACE/.pac"
+            exit 1
           fi
 
-          if [ ! -f "$POWERPLATFORMTOOLS_PACPATH" ]; then
-            found_pac=$(find /tmp -type f -name pac | head -n 1)
-            if [ -z "$found_pac" ]; then
-              echo "Could not locate pac binary under /tmp"
-              exit 0
-            fi
+          chmod +x "$pac_bin" || true
+          echo "PAC_BIN=$pac_bin" >> "$GITHUB_ENV"
+          "$pac_bin" --version
 
-            mkdir -p "$(dirname "$POWERPLATFORMTOOLS_PACPATH")"
-            ln -sf "$found_pac" "$POWERPLATFORMTOOLS_PACPATH"
-            chmod +x "$POWERPLATFORMTOOLS_PACPATH"
-            echo "Linked PAC from $found_pac"
-          fi
-
-          "$POWERPLATFORMTOOLS_PACPATH" --version || true
+      - name: Install Power Platform Tools
+        uses: microsoft/powerplatform-actions/actions-install@v1.9.1
+        with:
+          use-preinstalled-pac: ${{ env.PAC_BIN }}
 
       - name: Export Solution
         uses: microsoft/powerplatform-actions/export-solution@v1.9.1
