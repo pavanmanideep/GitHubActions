@@ -26,6 +26,30 @@ jobs:
       - name: Install Power Platform Tools
         uses: microsoft/powerplatform-actions/actions-install@v1.9.1
 
+      - name: Repair PAC path if missing
+        shell: bash
+        run: |
+          echo "Expected PAC path: $POWERPLATFORMTOOLS_PACPATH"
+          if [ -z "$POWERPLATFORMTOOLS_PACPATH" ]; then
+            echo "POWERPLATFORMTOOLS_PACPATH is not set"
+            exit 1
+          fi
+
+          if [ ! -f "$POWERPLATFORMTOOLS_PACPATH" ]; then
+            found_pac=$(find /tmp -type f -name pac | head -n 1)
+            if [ -z "$found_pac" ]; then
+              echo "Could not locate pac binary under /tmp"
+              exit 1
+            fi
+
+            mkdir -p "$(dirname "$POWERPLATFORMTOOLS_PACPATH")"
+            ln -sf "$found_pac" "$POWERPLATFORMTOOLS_PACPATH"
+            chmod +x "$POWERPLATFORMTOOLS_PACPATH"
+            echo "Linked PAC from $found_pac"
+          fi
+
+          "$POWERPLATFORMTOOLS_PACPATH" --version
+
       - name: Export Solution
         uses: microsoft/powerplatform-actions/export-solution@v1.9.1
         with:
