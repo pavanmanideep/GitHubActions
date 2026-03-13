@@ -21,8 +21,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install PAC CLI
+        run: |
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+
       - name: Install Power Platform Tools
         uses: microsoft/powerplatform-actions/actions-install@v1.9.1
+        with:
+          use-preinstalled-pac: '/home/runner/.dotnet/tools/pac'
 
       - name: Export Solution
         uses: microsoft/powerplatform-actions/export-solution@v1.9.1
