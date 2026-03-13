@@ -19,22 +19,12 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Install PAC CLI
-        run: |
-          dotnet tool install Microsoft.PowerApps.CLI.Tool --version 1.43.6 --tool-path "$GITHUB_WORKSPACE/.pac"
-          "$GITHUB_WORKSPACE/.pac/pac" --version
-
       - name: Install Power Platform Tools
         uses: microsoft/powerplatform-actions/actions-install@v1.9.1
-        with:
-          use-preinstalled-pac: '${{ github.workspace }}/.pac/pac'
 
       - name: Export Solution
         uses: microsoft/powerplatform-actions/export-solution@v1.9.1
