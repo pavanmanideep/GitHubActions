@@ -1,74 +1,137 @@
-name: export-and-branch-solution
-# Export solution from DEV environment
-#  unpack it and prepare, commit and push a git branch with the changes
+name: powerplatform-export-import-solution
 
 on:
   workflow_dispatch:
     inputs:
-      # Change this value
       solution_name:
-        description: 'name of the solution to worked on from Power Platform'
+        description: "Solution unique name"
         required: true
-        default: GitHub Actions Deployment
-       #Do Not change these values
-      solution_exported_folder:
-        description: 'folder name for staging the exported solution *do not change*'
+        default: "GitHubActionsDeployment"
+      import_unmanaged:
+        description: "Import unmanaged to target environment?"
         required: true
-        default: out/exported/
-      solution_folder:
-        description: 'staging the unpacked solution folder before check-in *do not change*'
+        default: "true"
+      import_managed:
+        description: "Import managed to target environment?"
         required: true
-        default: out/solutions/
-      solution_target_folder:
-       description: 'folder name to be created and checked in *do not change*'
-       required: true
-       default: solutions/
-
-env:
-#edit your values here
-  ENVIRONMENT_URL: https://ecellorsdev.crm8.dynamics.com/
-  USERNAME: admin@ecellors.onmicrosoft.com
+        default: "false"
 
 permissions:
   contents: write
 
 jobs:
-  build:
-
-    runs-on: windows-latest   # alternate runner OS is: ubuntu-latest
-
+  export:
+    runs-on: windows-latest
     steps:
-    - name: Install Power Platform Tools
-      uses: microsoft/powerplatform-actions/actions-install@v1
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Export Solution
-      uses: microsoft/powerplatform-actions/export-solution@v1
-      with:
-        environment-url: 'https://ecellors.crm8.dynamics.com/'
-        user-name: 'admin@ecellors.onmicrosoft.com'
-        password-secret: ${{ secrets.MYPASSWORD }}
-        solution-name: GitHub Actions Deployment
-        solution-output-file: 'GitHub Actions Deployment.zip'
-        working-directory: 'out'
+      - name: Install Power Platform Tools (PAC CLI)
+        uses: microsoft/powerplatform-actions/actions-install@v1
 
-    - name: Unpack Solution
-      uses: microsoft/powerplatform-actions/unpack-solution@v1
-      with:
-        solution-file: 'out/aSolution1.zip'
-        solution-folder: 'out/solutions/solution one'
-        solution-type: 'Unmanaged'
-        overwrite-files: true
+      - name: PAC CLI auth (source)
+        shell: pwsh
+        run: |
+          pac auth clear
+          pac auth create `
+            --kind DATAVERSE `
+            --url "${{ secrets.SOURCE_ENV_URL }}" `
+            --tenant "${{ secrets.PP_TENANT_ID }}" `
+            --applicationId "${{ secrets.PP_CLIENT_ID }}" `
+            --clientSecret "${{ secrets.PP_CLIENT_SECRET }}"
+          pac auth list
 
-    - name: Publish Solution
-      uses: microsoft/powerplatform-actions/publish-solution@v1
-      with:
-        environment-url: 'https://org25de9f96.crm8.dynamics.com/'
-        user-name: 'admin@ecellors.onmicrosoft.com'
-        password-secret: ${{ secrets.MYPASSWORD }}
+      - name: Export solution (unmanaged)
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: ${{ secrets.SOURCE_ENV_URL }}
+          solution-name: ${{ inputs.solution_name }}
+          managed: false
+          solution-output-file: "${{ inputs.solution_name }}_unmanaged.zip"
+          working-directory: out
 
-    - name: Prepare solution changes for check-in into source control
-      uses: microsoft/powerplatform-actions/branch-solution@v1
-      with:
-        solution-folder: 'out/solutions/solution one'
-        solution-target-folder: 'src/solutions/solution1'
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Export solution (managed)
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: ${{ secrets.SOURCE_ENV_URL }}
+          solution-name: ${{ inputs.solution_name }}
+          managed: true
+          solution-output-file: "${{ inputs.solution_name }}_managed.zip"
+          working-directory: out
+
+      - name: Unpack solution (unmanaged)
+        uses: microsoft/powerplatform-actions/unpack-solution@v1
+        with:
+          solution-file: "out/${{ inputs.solution_name }}_unmanaged.zip"
+          solution-folder: "out/solutions/${{ inputs.solution_name }}"
+          solution-type: Unmanaged
+          overwrite-files: true
+
+      - name: Copy unpacked solution into repo folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "solutions\${{ inputs.solution_name }}" | Out-Null
+          Copy-Item -Recurse -Force "out\solutions\${{ inputs.solution_name }}\*" "solutions\${{ inputs.solution_name }}\"
+
+      - name: Commit unpacked solution changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add solutions/
+          git commit -m "Export solution ${{ inputs.solution_name }}" || echo "No changes to commit"
+          git push || echo "No push (detached HEAD or insufficient permissions)"
+
+      - name: Upload exported zips
+        uses: actions/upload-artifact@v4
+        with:
+          name: exported-solution-zips
+          path: |
+            out/${{ inputs.solution_name }}_unmanaged.zip
+            out/${{ inputs.solution_name }}_managed.zip
+
+  import:
+    runs-on: windows-latest
+    needs: export
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Power Platform Tools (PAC CLI)
+        uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Download exported zips
+        uses: actions/download-artifact@v4
+        with:
+          name: exported-solution-zips
+          path: out
+
+      - name: PAC CLI auth (target)
+        shell: pwsh
+        run: |
+          pac auth clear
+          pac auth create `
+            --kind DATAVERSE `
+            --url "${{ secrets.TARGET_ENV_URL }}" `
+            --tenant "${{ secrets.PP_TENANT_ID }}" `
+            --applicationId "${{ secrets.PP_CLIENT_ID }}" `
+            --clientSecret "${{ secrets.PP_CLIENT_SECRET }}"
+          pac auth list
+
+      - name: Import unmanaged
+        if: ${{ inputs.import_unmanaged == 'true' }}
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: ${{ secrets.TARGET_ENV_URL }}
+          solution-file: "out/${{ inputs.solution_name }}_unmanaged.zip"
+          force-overwrite: true
+          publish-changes: true
+
+      - name: Import managed
+        if: ${{ inputs.import_managed == 'true' }}
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: ${{ secrets.TARGET_ENV_URL }}
+          solution-file: "out/${{ inputs.solution_name }}_managed.zip"
+          force-overwrite: true
+          publish-changes: true
