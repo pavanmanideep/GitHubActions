@@ -29,22 +29,13 @@ jobs:
       - name: Install Power Platform Tools (PAC CLI)
         uses: microsoft/powerplatform-actions/actions-install@v1
 
-      - name: PAC CLI auth (source)
-        shell: pwsh
-        run: |
-          pac auth clear
-          pac auth create `
-            --kind DATAVERSE `
-            --url "${{ secrets.SOURCE_ENV_URL }}" `
-            --tenant "${{ secrets.PP_TENANT_ID }}" `
-            --applicationId "${{ secrets.PP_CLIENT_ID }}" `
-            --clientSecret "${{ secrets.PP_CLIENT_SECRET }}"
-          pac auth list
-
       - name: Export solution (unmanaged)
         uses: microsoft/powerplatform-actions/export-solution@v1
         with:
           environment-url: ${{ secrets.SOURCE_ENV_URL }}
+          app-id: ${{ secrets.PP_CLIENT_ID }}
+          client-secret: ${{ secrets.PP_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.PP_TENANT_ID }}
           solution-name: ${{ inputs.solution_name }}
           managed: false
           solution-output-file: "${{ inputs.solution_name }}_unmanaged.zip"
@@ -54,6 +45,9 @@ jobs:
         uses: microsoft/powerplatform-actions/export-solution@v1
         with:
           environment-url: ${{ secrets.SOURCE_ENV_URL }}
+          app-id: ${{ secrets.PP_CLIENT_ID }}
+          client-secret: ${{ secrets.PP_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.PP_TENANT_ID }}
           solution-name: ${{ inputs.solution_name }}
           managed: true
           solution-output-file: "${{ inputs.solution_name }}_managed.zip"
@@ -106,23 +100,14 @@ jobs:
           name: exported-solution-zips
           path: out
 
-      - name: PAC CLI auth (target)
-        shell: pwsh
-        run: |
-          pac auth clear
-          pac auth create `
-            --kind DATAVERSE `
-            --url "${{ secrets.TARGET_ENV_URL }}" `
-            --tenant "${{ secrets.PP_TENANT_ID }}" `
-            --applicationId "${{ secrets.PP_CLIENT_ID }}" `
-            --clientSecret "${{ secrets.PP_CLIENT_SECRET }}"
-          pac auth list
-
       - name: Import unmanaged
         if: ${{ inputs.import_unmanaged == 'true' }}
         uses: microsoft/powerplatform-actions/import-solution@v1
         with:
           environment-url: ${{ secrets.TARGET_ENV_URL }}
+          app-id: ${{ secrets.PP_CLIENT_ID }}
+          client-secret: ${{ secrets.PP_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.PP_TENANT_ID }}
           solution-file: "out/${{ inputs.solution_name }}_unmanaged.zip"
           force-overwrite: true
           publish-changes: true
@@ -132,6 +117,9 @@ jobs:
         uses: microsoft/powerplatform-actions/import-solution@v1
         with:
           environment-url: ${{ secrets.TARGET_ENV_URL }}
+          app-id: ${{ secrets.PP_CLIENT_ID }}
+          client-secret: ${{ secrets.PP_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.PP_TENANT_ID }}
           solution-file: "out/${{ inputs.solution_name }}_managed.zip"
           force-overwrite: true
           publish-changes: true

@@ -41,7 +41,6 @@ jobs:
 
           chmod +x "$pac_bin" || true
           echo "PAC_BIN=$pac_bin" >> "$GITHUB_ENV"
-          "$pac_bin" --version
 
       - name: Install Power Platform Tools
         uses: microsoft/powerplatform-actions/actions-install@v1.9.1
